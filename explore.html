@@ -1,0 +1,468 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>Artery Flow Explorer</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { --bg:#0f1113; --panel:#171a1d; --line:#2a2f34; --text:#e6e8ea; --muted:#8d959c; --accent:#76b900; --gold:#ffd65a; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:13px/1.4 system-ui, Segoe UI, Arial, sans-serif; }
+  header { display:flex; align-items:center; gap:14px; padding:10px 16px; border-bottom:1px solid var(--line); }
+  header h1 { font-size:16px; margin:0; font-weight:600; }
+  header .tag { color:var(--muted); }
+  header .stat { margin-left:auto; color:var(--muted); font-variant-numeric:tabular-nums; }
+  main { display:grid; grid-template-columns: 270px 1fr 300px; gap:0; height: calc(100vh - 45px); transition: grid-template-columns .2s; }
+  main.no-left { grid-template-columns: 0 1fr 300px; } main.no-right { grid-template-columns: 270px 1fr 0; }
+  main.no-left.no-right { grid-template-columns: 0 1fr 0; }
+  main.no-left aside.left, main.no-right aside.right { padding:0; border:0; overflow:hidden; }
+  main { position:relative; }
+  .side { position:absolute; top:6px; z-index:3; width:32px; height:32px; padding:4px; display:flex; align-items:center; justify-content:center;
+    background:transparent; border:1px solid transparent; border-radius:8px; color:var(--muted); }
+  .side:hover { background:#ffffff14; color:var(--text); }
+  .side img, .side svg { width:22px; height:22px; object-fit:contain; display:block; }
+  .side.r img.mirror { transform:scaleX(-1); }
+  #sideLeft { left:6px; } #sideRight { right:6px; }
+  aside.left h2:first-of-type { margin-left:38px; line-height:22px; } aside.right h2:first-of-type { margin-right:38px; line-height:22px; }
+  aside.left, aside.right { padding-top:12px; }
+  aside { background:var(--panel); overflow-y:auto; padding:10px 12px; }
+  aside.left { border-right:1px solid var(--line); } aside.right { border-left:1px solid var(--line); }
+  aside.right { direction:rtl; } aside.right > * { direction:ltr; }  /* scrollbar on the panel's left edge */
+  h2 { font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--accent); margin:14px 0 6px; }
+  h2:first-child { margin-top:2px; }
+  .seg { display:grid; grid-auto-flow:column; grid-auto-columns:1fr; gap:4px; margin-bottom:6px; }
+  .seg.v { grid-auto-flow:row; }
+  button { background:#20252a; color:var(--text); border:1px solid var(--line); border-radius:6px; padding:6px 6px; cursor:pointer; font:inherit; }
+  button:hover { border-color:#4a525a; }
+  button.on { border-color:var(--accent); background:#1f2a12; font-weight:600; }
+  button:disabled { opacity:.35; cursor:not-allowed; border-color:var(--line); }
+  .seg.g2 { grid-auto-flow:row; grid-template-columns:1fr 1fr; }
+  label.row { display:flex; justify-content:space-between; align-items:center; margin:6px 0 2px; color:var(--muted); }
+  input[type=range] { width:100%; accent-color:var(--accent); }
+  .check { display:flex; gap:8px; align-items:center; margin:6px 0; }
+  .note { color:var(--muted); font-size:12px; margin:4px 0; }
+  .ai-box { border:1px solid #6a5a1f; background:#2a240f; color:#f3e3a6; border-radius:6px; padding:6px 8px; margin:6px 0; font-size:12px; }
+  .stage { position:relative; background:#000; display:flex; align-items:center; justify-content:center; overflow:hidden; }
+  .stage img { max-width:100%; max-height:100%; cursor:crosshair; user-select:none; -webkit-user-drag:none; }
+  .stage .hint { position:absolute; left:12px; bottom:10px; color:var(--muted); font-size:12px; background:#000a; padding:4px 8px; border-radius:6px; }
+  .stage .status { position:absolute; inset:0; display:flex; flex-direction:column; gap:14px; align-items:center; justify-content:center;
+                   color:var(--text); font-size:15px; background:#000a; }
+  /* loading: a partial ring turning */
+  .spinner { width:44px; height:44px; border-radius:50%; border:4px solid #ffffff22; border-top-color:var(--accent);
+             border-right-color:var(--accent); animation:spin .9s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .spinner { animation-duration:2.5s; } }
+  .status.failed .spinner { display:none; }
+  #marker { position:absolute; width:14px; height:14px; border:2px solid #fff; border-radius:50%; transform:translate(-50%,-50%); pointer-events:none; display:none; box-shadow:0 0 0 2px #000; }
+  table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; }
+  td { padding:3px 0; border-bottom:1px solid #22272c; } td:last-child { text-align:right; font-weight:600; }
+  .cmp td:nth-child(2), .cmp td:nth-child(3) { text-align:right; } .cmp td:nth-child(2) { color:var(--muted); font-weight:400; }
+  .results { table-layout:fixed; margin:2px 0 6px; }
+  .results th { font-size:11px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.04em;
+                text-align:right; padding:4px 0 6px 6px; border-bottom:1px solid var(--line); vertical-align:bottom; white-space:nowrap; }
+  .results th:first-child { text-align:left; padding-left:0; width:52%; }
+  .results th.now { color:var(--gold); }
+  .results td { padding:5px 0 5px 6px; vertical-align:top; text-align:right; }
+  .results td:first-child { text-align:left; padding-left:0; font-weight:400; }
+  .results td.ref { color:var(--muted); font-weight:400; }
+  .results td.now { font-weight:600; }
+  .results .unit { display:block; color:var(--muted); font-size:11px; margin-top:1px; }
+  .results tr.state td { border-bottom:none; }
+  .results td.state { font-weight:600; text-align:right; }
+  .legend { margin:6px 0 10px; } .legend .bar { height:12px; border-radius:3px; }
+  .legend .ticks { display:flex; justify-content:space-between; color:var(--muted); font-size:11px; }
+  .legend .name { color:var(--muted); font-size:12px; margin-bottom:3px; }
+  canvas { width:100%; height:auto; aspect-ratio:560 / 340; display:block; background:#111417; border-radius:6px; }
+  .probe { background:#111417; border-radius:6px; padding:8px; min-height:56px; }
+  .probe b { color:var(--gold); }
+  .key { display:flex; gap:10px; flex-wrap:wrap; color:var(--muted); font-size:11px; margin-top:4px; }
+  .key span::before { content:""; display:inline-block; width:14px; height:3px; margin-right:4px; vertical-align:middle; background:var(--c); }
+  @media (max-width: 1000px) { main, main.no-left, main.no-right, main.no-left.no-right { grid-template-columns: 1fr; height:auto; } .stage { min-height:56vw; }
+    main.no-left aside.left, main.no-right aside.right { display:none; } }
+</style></head>
+<body>
+<header>
+  <h1>Artery Flow Explorer</h1><span class="tag" id="tagline">blood flow through the story's middle cerebral artery · NVIDIA Warp, live</span>
+  <span class="stat" id="stat">connecting…</span>
+</header>
+<main>
+<button class="side l" id="sideLeft" title="Show / hide the controls (key: [)" aria-label="Show or hide the controls"><img src="/icon/left" alt="" onerror="this.replaceWith(glyph(false))"></button>
+<button class="side r" id="sideRight" title="Show / hide the results (key: ])" aria-label="Show or hide the results"><img src="/icon/right" alt="" onerror="rightIcon(this)"></button>
+<aside class="left">
+  <h2>Simulation</h2>
+  <div class="note">Artery</div>
+  <div class="seg v" data-k="vessel"></div>
+  <div class="note" id="caseNote">Clot in the middle cerebral artery (how much it narrows the artery)</div>
+  <div class="seg g2" data-k="case"></div>
+  <div class="note">Blood pressure (mean, MAP)</div>
+  <div class="seg" data-k="flow"></div>
+  <div class="note" id="pending"></div>
+  <h2>AI estimate</h2>
+  <div class="note">Any clot size and blood pressure, predicted in seconds by an AI model (NVIDIA PhysicsNeMo) trained on this artery's simulations. An estimate, not a simulation.</div>
+  <label class="row">Clot size <span id="aiClotV"></span></label>
+  <input type="range" id="aiClot" min="0" max="100" step="5" value="50">
+  <label class="row">Blood pressure (mean) <span id="aiMapV"></span></label>
+  <input type="range" id="aiMap" min="70" max="145" step="5" value="95">
+  <div class="seg"><button id="aiGo">Estimate</button></div>
+  <div class="note" id="aiNote"></div>
+  <h2>Heartbeat</h2>
+  <div class="seg"><button id="play">Pause</button></div>
+  <label class="row">Slow motion <span id="slowmoV"></span></label>
+  <input type="range" id="slowmo" min="0.01" max="0.25" step="0.01">
+  <label class="row">Phase of the heartbeat <span id="phaseV"></span></label>
+  <input type="range" id="phase" min="0" max="1" step="0.005">
+
+  <h2>Visualization</h2>
+  <label class="check"><input type="checkbox" id="particles"> Blood particles (colour = speed)</label>
+  <div class="note">Wall colour</div>
+  <div class="seg" data-k="wall"></div>
+  <div class="note">Slice</div>
+  <div class="seg" data-k="slice"></div>
+  <div class="note">Slice shows</div>
+  <div class="seg" data-k="field"></div>
+  <label class="row"><span id="acrossName">Cross-section along the MCA</span> <span id="acrossV"></span></label>
+  <input type="range" id="across_at" min="0" max="1" step="0.005">
+
+  <h2>Compare</h2>
+  <div class="seg v" data-k="compare"></div>
+
+  <h2>Camera</h2>
+  <div class="seg" data-k="view"></div>
+  <div class="seg"><button id="orbit">Orbit</button><button id="reset">Reset view</button></div>
+  <div class="note">Drag the image to turn, scroll to zoom, click to read pressure and speed. A cross-section brings its own close-up camera.</div>
+
+  <h2>Display</h2>
+  <div class="seg" data-k="resolution"></div>
+  <div class="seg" data-k="quality"></div>
+</aside>
+
+<section class="stage" id="stage">
+  <img id="view" alt="live render" draggable="false">
+  <div id="marker"></div>
+  <div class="status" id="status" role="status" aria-live="polite"><div class="spinner"></div><span id="statusText">loading…</span></div>
+  <div class="hint">drag: turn · scroll: zoom · click: read the blood</div>
+</section>
+
+<aside class="right">
+  <h2 id="caseTitle">Results</h2>
+  <div class="ai-box" id="aiBox" style="display:none"></div>
+  <table class="results" id="numbers"></table>
+  <h2>Pressure over the heartbeat</h2>
+  <canvas id="chart" width="560" height="340"></canvas>
+  <div class="key" id="chartKey"></div>
+  <h2>Probe</h2>
+  <div class="probe" id="probe"><span class="note">Click the artery to read the blood pressure and speed there.</span></div>
+  <h2>Colour scales</h2>
+  <div id="legends"></div>
+  <div class="note">Values are from the simulation's last heartbeat (lattice Boltzmann). “Healthy” is the healthy artery at the same blood pressure. Blood pressure is the mean pressure entering the artery: normal 95 mmHg (calibrated so the healthy artery draws the sourced 240 mL/min); stroke 118 and severe 146 mmHg are the average and highest of 7 emergency stroke patients on arrival (Sen et al., West J Emerg Med 2014). Brain tissue blood flow is the MCA flow per 100 g of the brain it feeds (about <span id="terr">175</span> g, sized so the healthy artery at normal pressure gives the normal 70.8); its state uses CT-perfusion values (Ionita et al., Endovascular Today 2009): at least 64.8 normal, 24.6–64.8 penumbra, below 24.6 infarct core. The model has no collateral vessels, so a blocked artery's tissue gets no flow at all here. The 90 % clot's 0.2 mm throat is only ~4 grid cells across: its numbers are approximate.
+  <span id="patientNote"></span></div>
+</aside>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const LABELS = {
+  vessel: {story:'Story artery (left MCA, modelled)'},   // + each patient's own vessel, from the server (buildSegs)
+  case: {healthy:'Healthy', narrow30:'30 %', narrow50:'50 %', narrow70:'70 %', narrow90:'90 %', occluded:'Fully blocked'},
+  flow: {normal:'Normal 95', stroke:'Stroke 118', severe:'Severe 146'},
+  wall: {pressure:'Pressure', shear:'Shear stress', change:'Change', plain:'Plain'},
+  slice: {off:'Off', along:'Lengthwise', across:'Cross-section'},
+  field: {speed:'Speed', pressure:'Pressure', change:'Change'},
+  compare: {off:'Off', side:'Side by side with healthy', change:'Pressure change vs healthy'},
+  view: {overview:'Whole', clot:'Clot', junction:'Junction'},
+  resolution: {'540p':'540p', '720p':'720p', '1080p':'1080p'},
+  quality: {1:'Fast', 2:'Smooth edges'},
+};
+let S = {}, INFO = null, SHOWN = null, REF = 'healthy', AVAIL = '';
+// words that change with the artery: the story's clot vs a patient's own narrowing, compared with healthy vs pre scan
+const VES = () => INFO.vessels[S.vessel] || INFO.vessels.story;
+const isPatient = () => S.vessel && S.vessel !== 'story';
+const isAI = () => String(S.case || '').startsWith('ai_');   // an AI estimate (Step 15): compared with the nearest simulation
+const WORDS = () => isPatient()
+  ? {lesion:'narrowing', ref:'pre scan', refShort:'pre', vessel:'vessel'}
+  : isAI() ? {lesion:'clot', ref:'nearest simulation', refShort:'simulation', vessel:'MCA'}
+  : {lesion:'clot', ref:'healthy', refShort:'healthy', vessel:'MCA'};
+const tagOf = (clot, flow) => flow === 'normal' ? clot : `${clot}_map${INFO.flows[flow]}`;
+async function post(path, body) {
+  const r = await fetch(path, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+  return r.json();
+}
+async function set(body) { S = await post('/params', body); paint(); }
+
+function buildSegs() {
+  for (const [v, d] of Object.entries(INFO.vessels)) if (v !== 'story') {   // patients/cases.json, via the server
+    LABELS.vessel[v] = `Patient ${v.replace(/^P/, '')} (${d.title}, own MRA scans)`;
+    for (const [c, t] of Object.entries(d.scans)) LABELS.case[c] = t.charAt(0).toUpperCase() + t.slice(1);
+  }
+  document.querySelectorAll('.seg[data-k]').forEach(el => {
+    const k = el.dataset.k;
+    const opts = k === 'quality' ? [1, 2] : INFO.choices[k];
+    el.innerHTML = opts.map(o => `<button data-v="${o}">${LABELS[k][o] ?? o}</button>`).join('');
+    el.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return;
+      const v = k === 'quality' ? Number(b.dataset.v) : b.dataset.v; set({[k]: v}); hideMarker(); });
+  });
+}
+function paint() {
+  document.querySelectorAll('.seg[data-k]').forEach(el => {
+    el.querySelectorAll('button').forEach(b => b.classList.toggle('on', String(S[el.dataset.k]) === b.dataset.v));
+  });
+  // the artery's own cases only; a case / pressure pair is selectable once its simulation has finished
+  const av = new Set(INFO.available), mine = new Set(VES().cases), w = WORDS();
+  document.querySelectorAll('.seg[data-k=case] button').forEach(b => b.style.display = mine.has(b.dataset.v) ? '' : 'none');
+  document.querySelectorAll('.seg[data-k=vessel] button').forEach(b => {
+    b.disabled = !INFO.vessels[b.dataset.v].cases.some(c => av.has(c));
+    b.title = b.disabled ? 'simulation not finished yet' : ''; });
+  const v = VES();
+  $('caseNote').textContent = isPatient()
+    ? `This patient's own ${v.side} ${v.vessel}. Two MRA scans; no clot added.`
+    : 'Clot in the middle cerebral artery (how much it narrows the artery)';
+  $('tagline').textContent = isPatient()
+    ? `blood flow through patient ${S.vessel.slice(1)}'s own ${v.title} · NVIDIA Warp, live`
+    : "blood flow through the story's middle cerebral artery · NVIDIA Warp, live";
+  $('acrossName').textContent = `Cross-section along the ${w.vessel}`;
+  document.querySelector('.seg[data-k=view] button[data-v=clot]').textContent = isPatient() ? 'Narrowing' : 'Clot';
+  document.querySelector('.seg[data-k=compare] button[data-v=side]').textContent = `Side by side with ${w.ref}`;
+  document.querySelector('.seg[data-k=compare] button[data-v=change]').textContent = `Pressure change vs ${w.ref}`;
+  $('chartKey').innerHTML = `<span style="--c:#ffd65a">before the ${w.lesion}</span><span style="--c:#4fc3f7">after the ${w.lesion}</span><span style="--c:#777">${w.ref}, after</span>`;
+  $('patientNote').textContent = isPatient()
+    ? `Patient ${S.vessel.slice(1)}: the vessel wall is this patient's own MRA segmentation (two scans; nothing from the reports but the findings). Same heart (inlet pressure) and the same brain downstream (outlet resistances) as the story artery, so only the vessel differs. ${v.note} Brain tissue flow uses the story's MCA territory.`
+    : '';
+  document.querySelectorAll('.seg[data-k=case] button').forEach(b => {
+    b.disabled = !av.has(tagOf(b.dataset.v, S.flow)) && !av.has(b.dataset.v);
+    b.title = b.disabled ? 'simulation not finished yet' : ''; });
+  document.querySelectorAll('.seg[data-k=flow] button').forEach(b => {
+    b.disabled = isAI() || !av.has(tagOf(S.case, b.dataset.v));
+    if (isAI()) b.classList.remove('on');
+    b.title = isAI() ? 'an AI estimate: its blood pressure is set below' : b.disabled ? 'not simulated yet for this clot' : ''; });
+  aiPaint();
+  const doneN = VES().cases.reduce((n, c) => n + INFO.choices.flow.filter(f => av.has(tagOf(c, f))).length, 0);
+  const todo = VES().cases.length * INFO.choices.flow.length - doneN;
+  $('pending').textContent = todo > 0 ? `${doneN} of ${doneN + todo} simulations finished for this artery; greyed-out choices appear as their runs finish.` : '';
+  $('play').textContent = S.playing ? 'Pause' : 'Play';
+  $('play').classList.toggle('on', S.playing);
+  $('orbit').classList.toggle('on', S.orbit);
+  $('particles').checked = S.particles;
+  $('slowmo').value = S.slowmo; $('slowmoV').textContent = `1/${Math.round(1 / S.slowmo)} speed`;
+  $('across_at').value = S.across_at; $('acrossV').textContent = where(S.across_at);
+  $('across_at').disabled = S.slice !== 'across';
+  document.querySelector('.seg[data-k=field]').style.opacity = S.slice === 'off' ? .45 : 1;
+  numbers(); chart(); legends();
+}
+function where(f) {   // cross-section position, in words relative to the clot (a patient: the narrowing)
+  const m = VES().mca, s = f * m.length, w = WORDS().lesion;
+  if (s < m.clot_start) return `${(m.clot_start - s).toFixed(1)} mm before the ${w}`;
+  if (s > m.clot_end) return `${(s - m.clot_end).toFixed(1)} mm after the ${w}`;
+  return s < m.clot_mid - 1.2 ? `${w}: getting narrower` : s > m.clot_mid + 1.2 ? `${w}: widening` : `${w}: narrowest`;
+}
+// brain tissue the MCA feeds: its blood flow per 100 g and its state, by the CT-perfusion thresholds
+function tissueState(cbf) {   // classified on the value as shown (1 decimal); within 1 of a threshold: borderline
+  const t = INFO.cbf, v = Math.round(cbf * 10) / 10;
+  const [st, col] = v >= t.penumbra ? ['normal', 'var(--ok, #6fcf73)'] : v >= t.core ? ['penumbra (starved, savable)', '#ffb347']
+       : ['infarct core (dying)', '#ff5c5c'];
+  const edge = [t.penumbra, t.core].some(x => Math.abs(cbf - x) < 1);
+  return [st + (edge ? ', borderline' : ''), col];
+}
+function tissue(c, h, cmp, row) {
+  if (!INFO.territory_g) return '';
+  $('terr').textContent = INFO.territory_g.toFixed(0);
+  const cbf = q => 100 * q / INFO.territory_g;
+  const [st, col] = tissueState(cbf(c.Q_mca)), [hst, hcol] = tissueState(cbf(h.Q_mca));
+  return row('Brain tissue blood flow', 'mL/100 g/min', cbf(h.Q_mca), cbf(c.Q_mca), 1) +
+    `<tr class="state"><td>Brain tissue state</td>` + (cmp ? `<td class="ref" style="color:${hcol}">${hst}</td>` : '') +
+    `<td class="state" style="color:${col}">${st}</td></tr>`;
+}
+function numbers() {
+  if (!INFO) return;
+  const c = INFO.cases[SHOWN || tagOf(S.case, S.flow)] || INFO.cases[S.case], h = INFO.cases[REF] || INFO.cases.healthy;
+  if (!c) return;
+  $('caseTitle').textContent = c.label;
+  const w = WORDS(), cmp = c !== h;   // the reference column only when it is a different case
+  const num = (x, d) => x === null || x === undefined || Number.isNaN(x) ? '–' : x.toFixed(d);
+  // a row: quantity (unit below it), the reference's value, this case's value
+  const row = (name, unit, hv, cv, d) => cv === null || cv === undefined ? '' :   // e.g. no ACA outlet
+    `<tr><td>${name}<span class="unit">${unit}</span></td>` + (cmp ? `<td class="ref">${num(hv, d)}</td>` : '') +
+    `<td class="now">${num(cv, d)}</td></tr>`;
+  const q = (name, unit, a, d=0) => row(name, unit, h[a], c[a], d);
+  const head = `<thead><tr><th>Quantity</th>` + (cmp ? isAI() ? `<th>Simulation</th><th class="now">AI</th>`
+                                                     : `<th>${w.ref[0].toUpperCase() + w.ref.slice(1)}</th><th class="now">This case</th>`
+                                                     : `<th class="now">Value</th>`) + `</tr></thead>`;
+  $('numbers').innerHTML = head + '<tbody>' +
+    q('Blood flow in (carotid)', 'mL/min', 'Q_in') +
+    q('Middle cerebral artery flow', 'mL/min', 'Q_mca') +
+    q('Other branch (ACA) flow', 'mL/min', 'Q_aca') +
+    q(`Pressure before the ${w.lesion}`, 'mmHg', 'p_before') +
+    q(`Pressure after the ${w.lesion}`, 'mmHg', 'p_after') +
+    q(`Pressure drop across the ${w.lesion}`, 'mmHg', 'drop') +
+    q('Top speed', 'm/s', 'umax', 1) +
+    (c.wss_where ? q(c.wss_where === 'at the clot' ? `Wall shear stress at the ${w.lesion} (beat average)` : 'Wall shear stress, whole vessel (beat average)', 'Pa', 'wss_clot', 1) +
+                   q('Peak wall shear stress', 'Pa', 'wss_peak', 0) +
+                   q('Wall with very low shear stress (< 0.4 Pa)', '% of the wall', 'wss_low', 1) : '') +
+    tissue(c, h, cmp, row) + '</tbody>';
+}
+function chart(phase) {
+  if (!INFO) return;
+  const cv = $('chart'), g = cv.getContext('2d'), W = cv.width, H = cv.height;
+  g.clearRect(0, 0, W, H);
+  const cc = INFO.cases[SHOWN || S.case], hh = INFO.cases[REF] || INFO.cases.healthy;
+  if (!cc) return;
+  const c = cc.series, h = hh.series, P = INFO.period;
+  const all = [...c.before, ...c.after, ...(cc !== hh ? h.after : [])].filter(Number.isFinite);
+  const step = 40, lo = 0, hi = Math.max(160, Math.ceil((Math.max(...all) + 5) / step) * step);
+  const pad = {l:58, r:14, t:40, b:38};
+  const X = t => pad.l + (W - pad.l - pad.r) * t / P, Y = p => H - pad.b - (H - pad.t - pad.b) * (p - lo) / (hi - lo);
+  g.strokeStyle = '#2a2f34'; g.fillStyle = '#8d959c'; g.font = '24px system-ui'; g.lineWidth = 1;
+  g.textAlign = 'right';
+  for (let p = lo; p <= hi; p += step) { g.beginPath(); g.moveTo(pad.l, Y(p)); g.lineTo(W - pad.r, Y(p)); g.stroke(); g.fillText(p, pad.l - 8, Y(p) + 6); }
+  g.textAlign = 'left'; g.fillText('mmHg', 6, 24);
+  g.textAlign = 'center'; g.fillText('one heartbeat (1 s)', pad.l + (W - pad.l - pad.r) / 2, H - 6); g.textAlign = 'left';
+  g.save(); g.beginPath(); g.rect(pad.l, pad.t - 2, W - pad.l - pad.r, H - pad.t - pad.b + 4); g.clip();   // lines stay in the plot
+  const line = (s, key, col, dash) => { g.strokeStyle = col; g.lineWidth = 3; g.setLineDash(dash || []); g.beginPath();
+    s.t.forEach((t, i) => i ? g.lineTo(X(t), Y(s[key][i])) : g.moveTo(X(t), Y(s[key][i]))); g.stroke(); g.setLineDash([]); };
+  if (cc !== hh) line(h, 'after', '#777', [8, 6]);
+  line(c, 'before', '#ffd65a'); line(c, 'after', '#4fc3f7');
+  g.restore();
+  if (phase !== undefined) { g.strokeStyle = '#76b900'; g.lineWidth = 2; g.beginPath(); g.moveTo(X(phase), pad.t); g.lineTo(X(phase), H - pad.b); g.stroke(); }
+}
+function legends() {
+  if (!INFO) return;
+  const show = [];
+  if (S.particles) show.push(['speed', 'Particles: blood speed (m/s)']);
+  const wall = S.compare === 'change' ? 'change' : S.wall;
+  const vs = WORDS().ref;
+  if (wall !== 'plain') show.push([wall, {change:`Wall: pressure change vs ${vs} (mmHg)`, pressure:'Wall: blood pressure (mmHg)',
+    shear:'Wall: shear stress, the drag of the blood on the wall (Pa, log scale)'}[wall]]);
+  if (S.slice !== 'off') { const f = S.compare === 'change' ? 'change' : S.field;
+    show.push([f, {speed:'Slice: blood speed (m/s)', pressure:'Slice: blood pressure (mmHg)', change:`Slice: pressure change vs ${vs} (mmHg)`}[f]]); }
+  const seen = new Set();
+  $('legends').innerHTML = show.filter(([k, n]) => !seen.has(n) && seen.add(n)).map(([k, n]) => {
+    const r = INFO.ranges[k], cs = INFO.colours[k];
+    const ticks = (INFO.log || {})[k] || [0, .25, .5, .75, 1].map(f => Math.round(r[0] + (r[1] - r[0]) * f));
+    return `<div class="legend"><div class="name">${n}</div><div class="bar" style="background:linear-gradient(90deg,${cs.join(',')})"></div>
+      <div class="ticks">${ticks.map(t => `<span>${t}</span>`).join('')}</div></div>`; }).join('');
+}
+
+// --- AI estimate (Step 15): any clot size and blood pressure, from the trained model
+let aiBusy = false, aiMsg = '';
+function aiLabels() {
+  $('aiClotV').textContent = `${$('aiClot').value} %`;
+  $('aiMapV').textContent = `${$('aiMap').value} mmHg`;
+}
+function aiPaint() {
+  const st = (INFO.ai || {}).status || 'starting', c = INFO.cases[S.case];
+  $('aiGo').disabled = aiBusy || st !== 'ready';
+  $('aiGo').textContent = aiBusy ? 'Estimating…' : 'Estimate';
+  $('aiGo').classList.toggle('on', isAI());
+  $('aiNote').textContent = aiMsg || (st === 'ready' ? (isAI() && c ? `Showing the estimate (made in ${c.secs ?? '–'} s), next to the nearest simulation: ${c.nearest_label}.`
+    : 'Pick a clot size and blood pressure, then Estimate.') : `AI model ${st}…`);
+  $('aiBox').style.display = isAI() && c ? '' : 'none';
+  if (isAI() && c && !aiBusy && document.activeElement?.type !== 'range') {   // the sliders show the estimate on view
+    $('aiClot').value = Math.round(100 * c.severity); $('aiMap').value = c.map_mmhg; aiLabels(); }
+  if (isAI() && c) $('aiBox').innerHTML = `<b>AI estimate, not a simulation.</b> A PhysicsNeMo ${c.model.toUpperCase()} trained on ${c.trained_on} simulations of this artery (clot sizes ${c.trained_clots.join(', ')} %; blood pressures 66–146 mmHg). Tested on the 50 % clot, which it never saw, it read the middle cerebral artery flow 3–17 % low and the pressure drop up to 12 % high, so treat these numbers as approximate. The left column is the nearest real simulation (${c.nearest_label}).`;
+}
+async function aiEstimate() {
+  if (aiBusy) return;
+  aiBusy = true; aiMsg = ''; aiPaint();
+  try {
+    const r = await post('/estimate', {clot: Number($('aiClot').value), map: Number($('aiMap').value)});
+    if (r.error) aiMsg = r.error;
+    else { INFO = await (await fetch('/info')).json(); AVAIL = INFO.available.join(); S = r.state; }
+  } catch (e) { aiMsg = 'no answer from the explorer'; }
+  aiBusy = false; paint();
+}
+$('aiClot').oninput = aiLabels; $('aiMap').oninput = aiLabels;
+$('aiClot').onchange = aiEstimate; $('aiMap').onchange = aiEstimate;
+$('aiGo').onclick = aiEstimate;
+aiLabels();
+
+// --- image: drag to turn, wheel to zoom, click to probe
+const img = $('view');
+let drag = null, pending = null, sending = false;
+async function flush() { if (sending || !pending) return; sending = true; const b = pending; pending = null;
+  try { S = await post('/params', b); } finally { sending = false; if (pending) flush(); } }
+function queue(b) { pending = Object.assign(pending || {}, b); flush(); }
+img.addEventListener('mousedown', e => { drag = {x:e.clientX, y:e.clientY, yaw:S.yaw, pitch:S.pitch, moved:false}; e.preventDefault(); });
+window.addEventListener('mousemove', e => { if (!drag) return;
+  const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+  if (Math.abs(dx) + Math.abs(dy) > 3) { drag.moved = true; hideMarker(); }
+  if (drag.moved) queue({yaw: drag.yaw - dx * 0.35, pitch: Math.max(-85, Math.min(85, drag.pitch + dy * 0.35))}); });
+window.addEventListener('mouseup', async e => { if (!drag) return; const d = drag; drag = null;
+  if (!d.moved && e.target === img) probe(e); });
+img.addEventListener('wheel', e => { e.preventDefault(); hideMarker();
+  queue({zoom: Math.max(0.25, Math.min(4, (pending?.zoom ?? S.zoom) * (e.deltaY < 0 ? 1.12 : 1 / 1.12)))}); }, {passive:false});
+function hideMarker() { $('marker').style.display = 'none'; }
+async function probe(e) {
+  const r = img.getBoundingClientRect(), x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
+  const m = $('marker'), sr = $('stage').getBoundingClientRect();
+  m.style.left = (e.clientX - sr.left) + 'px'; m.style.top = (e.clientY - sr.top) + 'px'; m.style.display = 'block';
+  const res = await post('/probe', {x, y});
+  if (res.error) { $('probe').innerHTML = `<span class="note">${res.error}</span>`; hideMarker(); return; }
+  const v = res.values.this, h = res.values.healthy;
+  if (!v) { $('probe').innerHTML = `<span class="note">No blood here (inside the ${WORDS().lesion}).</span>`; return; }
+  let html = `<div><b>${res.branch}</b></div>
+    <div>Pressure <b>${v.p.toFixed(0)} mmHg</b> · speed <b>${v.speed.toFixed(2)} m/s</b></div>`;
+  if (SHOWN !== REF && h) html += `<div class="note">${WORDS().ref} here: ${h.p.toFixed(0)} mmHg, ${h.speed.toFixed(2)} m/s (${(v.p - h.p >= 0 ? '+' : '') + (v.p - h.p).toFixed(0)} mmHg)</div>`;
+  html += `<div class="note">at this moment of the heartbeat; position (${res.point.join(', ')}) mm</div>`;
+  $('probe').innerHTML = html;
+}
+
+// --- side panels: hide / show (remembered in this browser)
+function panels(left, right) {
+  hideMarker();   // the picture changes size, so a probe marker would point at the wrong place
+  document.querySelector('main').classList.toggle('no-left', !left);
+  document.querySelector('main').classList.toggle('no-right', !right);
+  try { localStorage.setItem('explorerPanels', JSON.stringify([left, right])); } catch (e) {}
+}
+const shown = side => !document.querySelector('main').classList.contains(side);
+// the sidebar icon: icons/panel-left.* (and optionally icons/panel-right.*; else the left one mirrored)
+function glyph(mirror) { const t = document.createElement('template');
+  t.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="15" rx="3"/><path d="M9.5 4.5v15"/></svg>'; const g = t.content.firstChild; if (mirror) g.style.transform = 'scaleX(-1)'; return g; }
+function rightIcon(im) { im.onerror = () => im.replaceWith(glyph(true));
+  if (!im.dataset.tried) { im.dataset.tried = 1; im.classList.add('mirror'); im.src = '/icon/left'; } }
+document.querySelectorAll('.side img').forEach(im => {   // failed before this script was read
+  if (im.complete && !im.naturalWidth) { if (im.closest('#sideLeft')) im.replaceWith(glyph(false)); else rightIcon(im); } });
+const flipLeft = () => panels(!shown('no-left'), shown('no-right'));
+const flipRight = () => panels(shown('no-left'), !shown('no-right'));
+$('sideLeft').onclick = flipLeft;
+$('sideRight').onclick = flipRight;
+window.addEventListener('keydown', e => { if (e.target.tagName === 'INPUT') return;
+  if (e.key === '[') flipLeft(); if (e.key === ']') flipRight(); });
+try { const p = JSON.parse(localStorage.getItem('explorerPanels')); if (Array.isArray(p)) panels(p[0], p[1]); } catch (e) {}
+
+// --- controls
+$('play').onclick = () => set({playing: !S.playing});
+$('orbit').onclick = () => { hideMarker(); set({orbit: !S.orbit}); };
+$('reset').onclick = () => { hideMarker(); set({reset_view: true, orbit: false}); };
+$('particles').onchange = e => set({particles: e.target.checked});
+$('slowmo').oninput = e => queue({slowmo: Number(e.target.value)});
+$('slowmo').onchange = e => set({slowmo: Number(e.target.value)});
+$('across_at').oninput = e => { $('acrossV').textContent = where(Number(e.target.value)); queue({across_at: Number(e.target.value)}); };
+let scrubbing = false, PAGE = null;
+$('phase').oninput = e => { scrubbing = true; queue({phase: Number(e.target.value) * INFO.period, playing: false}); };
+$('phase').onchange = () => { scrubbing = false; paint(); };
+
+async function poll() {
+  try {
+    const st = await (await fetch('/state')).json();
+    // the page was edited on the server: every open browser picks the new one up (the view settings live on the server)
+    if (st.page !== undefined) { if (PAGE === null) PAGE = st.page; else if (st.page !== PAGE) { location.reload(); return; } }
+    $('status').style.display = st.status === 'ok' ? 'none' : 'flex';
+    $('statusText').textContent = st.status.startsWith('loading') || st.status.startsWith('compiling') ? st.status + '…' : st.status;
+    $('status').classList.toggle('failed', st.status.startsWith('failed'));
+    $('stat').textContent = `${st.fps.toFixed(0)} fps · ${st.render_ms.toFixed(0)} ms/frame`
+      + (st.playing && st.actual > 0 ? ` · playing at 1/${Math.round(1 / st.actual)} speed` : '');
+    if (!scrubbing && !drag) { $('phase').value = st.phase / INFO.period; }
+    $('phaseV').textContent = `${(st.phase * 1000).toFixed(0)} ms`;
+    const av = (st.available || []).join();
+    if (av !== AVAIL) { AVAIL = av; INFO = await (await fetch('/info')).json(); paint(); }   // a run finished
+    if (st.shown !== SHOWN || st.ref !== REF) { SHOWN = st.shown; REF = st.ref; numbers(); }
+    if (st.playing !== S.playing || st.orbit !== S.orbit || st.flow !== S.flow || st.vessel !== S.vessel || st.case !== S.case) { Object.assign(S, st); paint(); }
+    if (INFO.ai && st.ai !== INFO.ai.status) { INFO = await (await fetch('/info')).json(); paint(); }   // the AI model came up
+    chart(st.phase);
+  } catch (e) { $('stat').textContent = 'disconnected'; }
+}
+(async () => {
+  INFO = await (await fetch('/info')).json();
+  S = await (await fetch('/state')).json();
+  buildSegs(); paint();
+  img.src = '/stream';
+  setInterval(poll, 200);
+})();
+</script>
+</body></html>

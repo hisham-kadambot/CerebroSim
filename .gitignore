@@ -1,0 +1,30 @@
+# --- patient data: never published (MRA segmentations, reports, anything derived from them) ---
+patients/
+geometry/patients/
+reports/step11_*
+results/P1_*
+results/P2_*
+
+# --- project notes (they describe the patients) ---
+PLAN.md
+handover.md
+
+# --- simulation outputs: large, made by the scripts ---
+results/
+results_*/
+out/
+*.npz
+*.mp4
+*.log
+
+# --- AI: training data, checkpoints, environment ---
+ai/data/
+ai/runs/
+ai/.venv/
+*.pt
+
+# --- Python / tools ---
+__pycache__/
+*.pyc
+.venv/
+.claude/

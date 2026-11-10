@@ -1,0 +1,29 @@
+# Phase 2a AI environment (PhysicsNeMo), kept apart from the solver scripts' inline dependencies.
+# torch 2.12 + CUDA 12.6: the newest torch with a Windows torch_scatter wheel (needed by PhysicsNeMo's graph layers).
+[project]
+name = "artery-ai"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "nvidia-physicsnemo==2.2.2",
+  "torch==2.12.0",
+  "torch_geometric>=2.6.1",
+  "torch_scatter==2.1.2",
+  "warp-lang>=1.18,<1.19",
+  "numpy",
+  "scipy",
+  "matplotlib",
+]
+
+[tool.uv]
+package = false
+environments = ["sys_platform == 'win32'"]
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu126" }
+torch_scatter = { url = "https://data.pyg.org/whl/torch-2.12.0%2Bcu126/torch_scatter-2.1.2%2Bpt212cu126-cp312-cp312-win_amd64.whl" }
+
+[[tool.uv.index]]
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
+explicit = true
