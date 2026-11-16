@@ -20,7 +20,7 @@ speed, wall shear stress and the blood reaching the brain tissue.
 
 ## Requirements
 
-- Windows 11 (Linux should work for the solver; the AI environment is pinned to Windows wheels).
+- Windows 11, or Linux in the PhysicsNeMo container (see "Running in a container").
 - An NVIDIA GPU (developed on an RTX 3090, 24 GB). The fine 0.05 mm runs need about 14 GB.
 - [uv](https://docs.astral.sh/uv/). Every script declares its own dependencies, so there's no manual install.
   - Solver and explorer: `warp-lang>=1.18,<1.19`, numpy, scipy, scikit-image, matplotlib, pillow.
@@ -46,7 +46,7 @@ Simulation results aren't in the repository (they're tens of GB). The scripts ma
 | 3 | `uv run validate.py` | Validates `lbm.py`: steady and pulsing pipe flow, open pipes and a 70 % narrowing against the Young–Tsai correlation and a finer grid |
 | 4 | `uv run simulate.py <case>` | Pulsatile flow over several heartbeats. Cases: `healthy`, `narrow30` … `narrow90`, `occluded`. Options: `--map <mmHg>`, `--flow <factor>`, `--beats`, `--dt-scale`. `uv run simulate.py report` writes the summary |
 | 5 | `uv run visualise.py` | Ray-traced stills: wall pressure, change from healthy, particles, cut planes |
-| 6 | `uv run demo.py` | The demonstration video (1080p30, NVENC). `--stills` gives one still per shot; `--serve` runs a viewer on port 8002 |
+| 6 | `uv run demo.py` | The demonstration video (1080p30, NVENC; x264 on GPUs without it). `--stills` gives one still per shot; `--serve` runs a viewer on port 8002 |
 | 8 | `uv run explore.py` | The interactive explorer (port 8003) |
 | 9–10 | `bash run_all.sh`, `bash run_bp.sh` | Every clot size at 70 % and 130 % flow, and at the stroke blood pressures of 118 and 146 mmHg |
 | — | `uv run wss.py` | Wall shear stress for every finished run. `--test` checks it on Poiseuille pipes |
@@ -91,6 +91,29 @@ Each training example is one cell of the artery at one moment of the beat. Input
 place along the branch, local and healthy radius, direction and branch, plus the clot size, pressure level and
 phase. Outputs are pressure and the three velocity components. The 50 % clot runs are held out to test clot sizes
 the model hasn't seen.
+
+## Running in a container (headless Linux, e.g. A100)
+
+Everything runs as GPU compute, so no display is needed. Use NVIDIA's PhysicsNeMo container (it needs the NVIDIA
+Container Toolkit and a driver new enough for the image; see its NGC page):
+
+```
+docker run --gpus all -it --name cerebrosim -p 8003:8003 -p 8004:8004 \
+  -v /data/cerebrosim:/workspace/cerebrosim nvcr.io/nvidia/physicsnemo/physicsnemo:26.08
+cd /workspace/cerebrosim && git clone https://github.com/hisham-kadambot/CerebroSim.git && cd CerebroSim
+bash setup_container.sh                 # once: Warp, uv, Python packages, fonts; prints the GPU
+```
+
+- **Simulations, rendering and the explorer:** the same `uv run …` commands as above. Open the explorer from
+  another computer at `http://<host>:8003`, or through an SSH tunnel (`ssh -L 8003:localhost:8003 <host>`).
+- **AI scripts:** run them with the container's Python, which already has PyTorch and PhysicsNeMo:
+  `cd ai && python3 dataset.py`, `python3 train.py --model mlp --hours 1`, and so on. (`ai/pyproject.toml` is
+  for Windows.) The explorer starts the AI service with `python3` on Linux. Set `CEREBROSIM_AI_PYTHON` to use a
+  different interpreter.
+- **Video:** data-centre GPUs such as the A100 and H100 have no NVENC encoder, so `demo.py` falls back to x264 on
+  the CPU automatically.
+- **The A100 is faster:** the solver is limited by memory bandwidth, so expect roughly 1.5–2× the speed of an
+  RTX 3090.
 
 ## Data and limitations
 

@@ -12,7 +12,7 @@ The particles are simulated in order (their positions depend on the past), so th
 the viewer plays the MP4 (play / seek / chapters) instead of rendering live.
 
   uv run demo.py --stills          # one still per shot -> reports/step6_strip.png (quick check, ~1 min)
-  uv run demo.py                   # out/artery_demo.mp4 (1080p30, h264_nvenc) + out/chapters.json
+  uv run demo.py                   # out/artery_demo.mp4 (1080p30, NVENC; x264 without it) + out/chapters.json
   uv run demo.py --insert          # Step 7: out/story_insert/*.jpg, the scene played inside the stroke story
   uv run demo.py --serve           # web viewer on http://<this PC>:8002 (same network; port 8002 must be allowed)
 """
@@ -459,6 +459,15 @@ def run_sequence(demo, times, sink, render=None):
             sink(t, np.asarray(demo.frame(t)))
 
 
+def encoder(ff):
+    """ffmpeg video options: the GPU's NVENC when it has one (RTX), else x264 on the CPU (A100 / H100: no NVENC)."""
+    test = [ff, "-v", "error", "-f", "lavfi", "-i", "color=c=black:s=256x256:d=0.1", "-c:v", "h264_nvenc", "-f", "null", "-"]
+    if subprocess.run(test, capture_output=True).returncode == 0:
+        return ["-c:v", "h264_nvenc", "-preset", "p6", "-tune", "hq", "-rc", "vbr", "-cq", "19", "-b:v", "0"]
+    print("no NVENC on this GPU: encoding with x264 on the CPU", flush=True)
+    return ["-c:v", "libx264", "-preset", "slow", "-crf", "18"]
+
+
 def export(a):
     import imageio_ffmpeg
     ff = imageio_ffmpeg.get_ffmpeg_exe()
@@ -467,8 +476,8 @@ def export(a):
     n = int(round(TOTAL * FPS))
     demo = Demo(SIZE, a.ss)
     cmd = [ff, "-y", "-v", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{SIZE[0]}x{SIZE[1]}",
-           "-r", str(FPS), "-i", "-", "-c:v", "h264_nvenc", "-preset", "p6", "-tune", "hq", "-rc", "vbr",
-           "-cq", "19", "-b:v", "0", "-profile:v", "high", "-pix_fmt", "yuv420p", "-movflags", "+faststart", out]
+           "-r", str(FPS), "-i", "-", *encoder(ff), "-profile:v", "high", "-pix_fmt", "yuv420p", "-movflags", "+faststart",
+           out]
     proc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
     t0 = time.perf_counter()
 

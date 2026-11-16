@@ -33,6 +33,7 @@ import os
 import queue
 import socket
 import subprocess
+import sys
 import threading
 import time
 import urllib.error
@@ -609,6 +610,10 @@ def ai_service():
 
 
 ai_lock = threading.Lock()
+# the PhysicsNeMo environment: ai/'s uv project (Windows), or in a container (ai/pyproject.toml is Windows-only) the
+# container's own Python with PhysicsNeMo; CEREBROSIM_AI_PYTHON overrides
+AI_CMD = ([os.environ["CEREBROSIM_AI_PYTHON"]] if os.environ.get("CEREBROSIM_AI_PYTHON") else
+          ["uv", "run", "python"] if sys.platform == "win32" else ["python3"]) + ["estimate.py", "--serve"]
 
 
 def _ai_service():
@@ -622,7 +627,7 @@ def _ai_service():
         return
     ai_state["status"] = "starting"
     log = open(os.path.join(AI_DIR, "estimate.log"), "a")
-    subprocess.Popen(["uv", "run", "python", "estimate.py", "--serve"], cwd=AI_DIR, stdout=log, stderr=subprocess.STDOUT,
+    subprocess.Popen(AI_CMD, cwd=AI_DIR, stdout=log, stderr=subprocess.STDOUT,
                      env=dict(os.environ, PYTHONUNBUFFERED="1"), creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     for _ in range(180):
         time.sleep(1.0)
