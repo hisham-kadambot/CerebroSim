@@ -114,6 +114,35 @@ bash setup_container.sh                 # once: Warp, uv, Python packages, fonts
   the CPU automatically.
 - **The A100 is faster:** the solver is limited by memory bandwidth, so expect roughly 1.5–2× the speed of an
   RTX 3090.
+- **A ready-made image:** the `Dockerfile` is the PhysicsNeMo image with what `setup_container.sh` adds, so nothing
+  needs installing at start-up: `docker build -t cerebrosim .`, then `docker run … cerebrosim`. The Slurm jobs use
+  the same image.
+
+## Running the simulations on Slurm
+
+The explorer runs in a container, and the simulations and training run as Slurm jobs, one GPU each. Both use the
+same `cerebrosim` image and the same repository folder on **shared storage**. Jobs write `results/` and
+`ai/runs/`, and the explorer reads them.
+
+1. **Build the image once** (on a machine with Docker), in the repository folder:
+   - Pyxis/Enroot: `docker build -t cerebrosim . && enroot import -o cerebrosim.sqsh dockerd://cerebrosim:latest`
+   - Apptainer: `docker build -t cerebrosim . && apptainer build cerebrosim.sif docker-daemon://cerebrosim:latest`
+2. **Set up `slurm/config.sh`:** `RUNTIME` (`pyxis`, `apptainer` or `none`), `IMAGE`, the partition, account,
+   time limits and how many simulations run at once.
+3. **Submit**, from the repository folder:
+   ```
+   bash slurm/submit_all.sh              # simulations, then wall shear stress, training set and the MLP
+   bash slurm/submit_all.sh sims         # simulations only
+   bash slurm/submit_all.sh ai           # shear stress, training set and the MLP (results already there)
+   bash slurm/submit_all.sh --geotransolver   # also train GeoTransolver
+   squeue --me                           # progress; logs in results/slurm/ and results/<run>.log
+   ```
+
+The jobs are chained. The healthy run goes first because it calibrates the inlet. All the other runs in
+`slurm/runs.txt` (40 in all: 8 clot sizes × 5 blood-flow levels) then run in parallel, followed by shear stress,
+the training set and training. A run whose results are complete is skipped, so after a failure or time-out just
+submit again. A simulation can't resume part-way, so `TIME_SIM` must cover a whole run: up to about 12 h on an
+A100 for the 60–90 % clots at 146 mmHg.
 
 ## Data and limitations
 

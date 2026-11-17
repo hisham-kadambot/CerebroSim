@@ -1,0 +1,44 @@
+# The story artery's simulations: results folder, then simulate.py's arguments. Line order = job array index
+# (comments and blank lines skipped). The first run calibrates the inlet that all the others use, so submit_all.sh
+# runs it before the rest. Fine-grid clots (60, 70, 90 %) run 2 beats, the others 3; faster blood gets a shorter
+# time step (--dt-scale 0.75 at 130 % flow and 118 mmHg, 0.6 at 146 mmHg).
+healthy           healthy  --beats 4 --dt-scale 1.0
+healthy_flow70    healthy  --beats 3 --dt-scale 1.0  --flow 0.7
+healthy_flow130   healthy  --beats 3 --dt-scale 0.75 --flow 1.3
+healthy_map118    healthy  --beats 3 --dt-scale 0.75 --map 118
+healthy_map146    healthy  --beats 3 --dt-scale 0.6  --map 146
+narrow30          narrow30 --beats 3 --dt-scale 1.0
+narrow30_flow70   narrow30 --beats 3 --dt-scale 1.0  --flow 0.7
+narrow30_flow130  narrow30 --beats 3 --dt-scale 0.75 --flow 1.3
+narrow30_map118   narrow30 --beats 3 --dt-scale 0.75 --map 118
+narrow30_map146   narrow30 --beats 3 --dt-scale 0.6  --map 146
+narrow40          narrow40 --beats 3 --dt-scale 1.0
+narrow40_flow70   narrow40 --beats 3 --dt-scale 1.0  --flow 0.7
+narrow40_flow130  narrow40 --beats 3 --dt-scale 0.75 --flow 1.3
+narrow40_map118   narrow40 --beats 3 --dt-scale 0.75 --map 118
+narrow40_map146   narrow40 --beats 3 --dt-scale 0.6  --map 146
+narrow50          narrow50 --beats 3 --dt-scale 1.0
+narrow50_flow70   narrow50 --beats 3 --dt-scale 1.0  --flow 0.7
+narrow50_flow130  narrow50 --beats 3 --dt-scale 0.75 --flow 1.3
+narrow50_map118   narrow50 --beats 3 --dt-scale 0.75 --map 118
+narrow50_map146   narrow50 --beats 3 --dt-scale 0.6  --map 146
+narrow60          narrow60 --beats 2 --dt-scale 1.0
+narrow60_flow70   narrow60 --beats 2 --dt-scale 1.0  --flow 0.7
+narrow60_flow130  narrow60 --beats 2 --dt-scale 0.75 --flow 1.3
+narrow60_map118   narrow60 --beats 2 --dt-scale 0.75 --map 118
+narrow60_map146   narrow60 --beats 2 --dt-scale 0.6  --map 146
+narrow70          narrow70 --beats 2 --dt-scale 1.0
+narrow70_flow70   narrow70 --beats 2 --dt-scale 1.0  --flow 0.7
+narrow70_flow130  narrow70 --beats 2 --dt-scale 0.75 --flow 1.3
+narrow70_map118   narrow70 --beats 2 --dt-scale 0.75 --map 118
+narrow70_map146   narrow70 --beats 2 --dt-scale 0.6  --map 146
+narrow90          narrow90 --beats 2 --dt-scale 1.0
+narrow90_flow70   narrow90 --beats 2 --dt-scale 1.0  --flow 0.7
+narrow90_flow130  narrow90 --beats 2 --dt-scale 0.75 --flow 1.3
+narrow90_map118   narrow90 --beats 2 --dt-scale 0.75 --map 118
+narrow90_map146   narrow90 --beats 2 --dt-scale 0.6  --map 146
+occluded          occluded --beats 3 --dt-scale 1.0
+occluded_flow70   occluded --beats 3 --dt-scale 1.0  --flow 0.7
+occluded_flow130  occluded --beats 3 --dt-scale 0.75 --flow 1.3
+occluded_map118   occluded --beats 3 --dt-scale 0.75 --map 118
+occluded_map146   occluded --beats 3 --dt-scale 0.6  --map 146
